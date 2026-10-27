@@ -58,7 +58,7 @@ The `git-workflow` skill contains the commands for each step.
 ### Overview
 The organization's `.github` repository. GitHub uses its files as defaults for every repository in the Noosphaira organization.
 - `pull_request_template.md` is the default pull request template. A repository's own `.github/pull_request_template.md` takes precedence.
-- `.github/workflows/pr-policy.yml` holds the pull request policy checks: `branch-name`, `commit-messages`, `pr-size` and `ai-disclosure`. The organization rulesets "develop" and "master" require them.
+- `.github/workflows/pr-policy.yml` holds the pull request policy checks: `branch-name`, `commit-messages` and `pr-size`. The organization rulesets "develop" and "master" require them.
 
 ### Build, test and lint
 No build, tests or linters exist. Check a changed workflow with `actionlint .github/workflows/pr-policy.yml` when actionlint is installed.
@@ -73,7 +73,6 @@ No application exists. To review a change to `pr-policy.yml` or the template, op
 
 ### Conventions
 - A rule in `pr-policy.yml` that is also in `.githooks/lib/common.sh` (branch pattern, `Assisted-by` pattern, AI identity pattern, lockfile list) changes in both places.
-- A change to the template headings or the AI disclosure lines changes the `ai-disclosure` check with it.
 
 ### Exceptions to universal rules
 None.

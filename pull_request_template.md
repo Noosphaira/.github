@@ -9,8 +9,3 @@
 
 ## Verification
 <!-- Commands run (build, tests, linters) with results. What was not built, run or tested. -->
-
-## AI disclosure
-<!-- Required. Tick exactly one box. -->
-- [ ] No AI tools were used.
-- [ ] AI tools were used: <agent and model>. The output was reviewed and verified.
