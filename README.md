@@ -20,6 +20,7 @@ The full rules for agents and people are in the Universal section of `repo-files
 | `rulesets/develop.json`, `rulesets/master.json` | The organization rulesets "develop" and "master". |
 | `rulesets/apply.sh` | Creates the rulesets through the API. |
 | `repo-files/` | Files that every repository gets, at the paths they have in a repository. |
+| `.github/workflows/repository-setup.yml`, `scripts/setup-repos.sh` | Sets up new repositories automatically. See "Set up a repository". |
 | `agent/gh-app-token` | Token script for the machines that run coding agents. |
 | `AGENTS.md`, `.claude/`, `.githooks/` | This repository's own copy of the repository files. |
 
@@ -35,6 +36,20 @@ The full rules for agents and people are in the Universal section of `repo-files
 The rulesets take `pr-policy.yml` from `master` in this repository. A change to the workflow applies after it is released to `master`. This repository is public because a ruleset can use a workflow from a private repository only in private repositories.
 
 ## Set up a repository
+
+The `repository-setup` workflow runs every 15 minutes, as the `noosphere-agent` App. For each repository that is not set up yet, it:
+
+1. Creates `develop` from `master`.
+2. Makes `develop` the default branch and sets the merge settings. The App has no Administration permission, so GitHub refuses this step. The workflow then lists the settings in its run summary and opens the issue "Repository settings need an administrator" in the repository.
+3. Opens a pull request from `chore/repository-setup` to `develop` with the files in `repo-files/`.
+
+Then fill the Project section of `AGENTS.md` on that branch, and merge the pull request.
+
+A new repository needs a first commit on `master` (create it with a README). Set the organization's default branch name for new repositories to `master`. An empty repository, or one without `master`, is reported and skipped.
+
+To run the workflow at once: Actions > repository-setup > Run workflow. The inputs are a single repository and a dry run. Locally, with an App token in `GH_TOKEN`: `DRY_RUN=1 scripts/setup-repos.sh`.
+
+Manual setup, the same steps:
 
 1. Create `develop` from `master` and make it the default branch. Allow squash merge and merge commits, turn off rebase merge, and turn on head branch deletion after merge.
 2. On a branch from `develop`, copy the contents of `repo-files/` into the repository. Make the three hooks in `.githooks/` executable.
