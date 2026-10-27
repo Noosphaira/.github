@@ -69,9 +69,13 @@ No application exists. To review a change to `pr-policy.yml` or the template, op
 ### Repository layout
 - `pull_request_template.md`: default pull request template.
 - `.github/workflows/pr-policy.yml`: policy checks for pull requests to `develop` and `master`.
+- `rulesets/develop.json`, `rulesets/master.json`: the organization rulesets for `develop` and `master`. IDs are filled in by `rulesets/apply.sh`.
+- `rulesets/apply.sh`: creates the rulesets in the organization (needs the `admin:org` scope).
 - `README.md`: repository title.
 
 ### Conventions
+- The live organization rulesets match the files in `rulesets/`. After a change to a file, update the live ruleset in the organization settings or through the API, in the same change.
+- The rulesets take `pr-policy.yml` from `master`. A change to the workflow applies after it is released to `master`.
 - A rule in `pr-policy.yml` that is also in `.githooks/lib/common.sh` (branch pattern, `Assisted-by` pattern, AI identity pattern, lockfile list) changes in both places.
 
 ### Exceptions to universal rules
