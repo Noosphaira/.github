@@ -30,7 +30,7 @@ The full rules for agents and people are in the Universal section of `repo-files
 
 | Layer | What it enforces |
 |---|---|
-| Organization rulesets | Pull request required on `develop` and `master`. No force push, no deletion. Merge methods. Resolved review threads. One approval from `release-approvers` on `master`. The `pr-policy` checks. |
+| Organization rulesets | Pull request required on `develop` and `master`. No force push, no deletion. Merge methods. Resolved review threads. One approval from `release-approvers` on `master`; a new push dismisses it. The `pr-policy` checks. |
 | `pr-policy` workflow | `branch-name`: branch names, and pull requests to `master` only from `develop`. `commit-messages`: trailers, and subject lines of at most 72 characters in pull requests to `develop`. `pr-size`: 10,000 changed lines without lockfiles (the `size-exception` label allows more). `instruction-files`: no `CLAUDE.md` files. `gitleaks`: no secrets in the pull request's commits. `osv-scanner`: no dependency versions with known vulnerabilities that the base branch does not already have. `zizmor`: security audit of the repository's workflows. |
 | Git hooks in `.githooks/` | No commits or pushes to `develop` or `master`, branch names, commit subject length, commit trailers, no `CLAUDE.md` files, no whitespace errors or conflict markers, no staged file over 5 MiB, no secrets (gitleaks on the staged changes). Each clone needs `git config core.hooksPath .githooks`, and the machine needs `gitleaks`. |
 | Repository CI (`.github/workflows/ci.yml` in each repository) | The repository's format, lint and test, as the job `format, lint and test`. A repository ruleset on `develop` and `master` requires it. |
