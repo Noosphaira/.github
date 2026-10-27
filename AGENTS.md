@@ -78,6 +78,7 @@ No application exists. To review a change to `pr-policy.yml` or the template, op
 - `.github/workflows/pr-policy.yml`: policy checks for pull requests to `develop` and `master`.
 - `rulesets/develop.json`, `rulesets/master.json`: the organization rulesets for `develop` and `master`. IDs are filled in by `rulesets/apply.sh`.
 - `rulesets/apply.sh`: creates the rulesets in the organization (needs the `admin:org` scope).
+- `rulesets/repository-ci.json`: the repository ruleset "ci" that every repository with CI has.
 - `repo-files/`: the files every repository gets, at their repository paths. `AGENTS.md` there is the template with Project placeholders.
 - `agent/gh-app-token`: token script for agent machines.
 - `.github/workflows/repository-setup.yml`: runs `scripts/setup-repos.sh` every 15 minutes as the `noosphere-agent` App. App ID: variable `NOOSPHERE_AGENT_APP_ID`. Private key: secret `NOOSPHERE_AGENT_PRIVATE_KEY`.
