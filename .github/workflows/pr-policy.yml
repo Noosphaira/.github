@@ -49,11 +49,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check commit trailers
+      - name: Check commit subjects and trailers
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -eo pipefail
           assisted_by='^Assisted-by: [A-Za-z0-9._-]+:[A-Za-z0-9._-]+( \[[A-Za-z0-9._ -]+\])*$'
@@ -63,6 +64,20 @@ jobs:
             --jq '.[] | select((.parents | length) < 2) | [.sha[0:12], (.commit.message | @base64)] | @tsv' > "$commits"
           status=0
           while IFS=$'\t' read -r sha message_b64; do
+            # Subject length: pull requests to develop only. Squash merges append " (#N)"
+            # to the title, so commits in a release pull request may be longer.
+            if [ "$BASE_REF" = "develop" ]; then
+              subject="$(printf '%s' "$message_b64" | base64 --decode | awk 'NF { print; exit }')"
+              case "$subject" in
+                "Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*) ;;
+                *)
+                  if [ "${#subject}" -gt 72 ]; then
+                    echo "::error::$sha: the subject line has ${#subject} characters. The limit is 72. Subject: $subject"
+                    status=1
+                  fi
+                  ;;
+              esac
+            fi
             while IFS= read -r line; do
               line="${line%$'\r'}"
               case "$line" in
@@ -114,3 +129,117 @@ jobs:
             echo "::error::$changed changed lines exceed the limit of $LIMIT. A pull request over the limit needs the user's approval and the label size-exception."
             exit 1
           fi
+
+  instruction-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Refuse Claude instruction files
+        run: |
+          set -eo pipefail
+          files="$(git ls-files | grep -E '(^|/)CLAUDE(\.local)?\.md$' || true)"
+          if [ -n "$files" ]; then
+            while IFS= read -r file; do
+              echo "::error file=$file::Claude instruction file. Instructions for this repository go in AGENTS.md."
+            done <<< "$files"
+            exit 1
+          fi
+          echo "No CLAUDE.md, .claude/CLAUDE.md or CLAUDE.local.md files."
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -eo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "$SHA256  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan the pull request's commits for secrets
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eo pipefail
+          if ! "$RUNNER_TEMP/gitleaks" git --log-opts="$BASE_SHA..$HEAD_SHA" --redact --verbose --no-banner .; then
+            echo "::error::gitleaks found a possible secret in the pull request's commits (redacted above). Remove it from the history of the branch and rotate the secret. For a false positive, add its fingerprint to .gitleaksignore."
+            exit 1
+          fi
+
+  osv-scanner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install OSV-Scanner
+        env:
+          VERSION: 2.7.0
+          SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+        run: |
+          set -eo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/v${VERSION}/osv-scanner_linux_amd64"
+          echo "$SHA256  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+      - name: Find vulnerabilities the pull request adds
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eo pipefail
+          # Prints one line per vulnerable package: "<ecosystem> <name> <version> <vulnerability ID>".
+          scan() {
+            local status=0
+            "$RUNNER_TEMP/osv-scanner" scan source --recursive --format json "$1" > "$2.json" 2> "$2.log" || status=$?
+            case "$status" in
+              0 | 1) ;;
+              128) echo '{"results":[]}' > "$2.json" ;;
+              *) cat "$2.log"; return "$status" ;;
+            esac
+            jq -r '.results[]?.packages[]? | .package as $p | .vulnerabilities[]? | "\($p.ecosystem) \($p.name) \($p.version) \(.id)"' "$2.json" | sort -u > "$2.txt"
+          }
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA" > /dev/null
+          scan "$GITHUB_WORKSPACE" "$RUNNER_TEMP/head"
+          scan "$RUNNER_TEMP/base" "$RUNNER_TEMP/base-result"
+          new="$(comm -13 "$RUNNER_TEMP/base-result.txt" "$RUNNER_TEMP/head.txt")"
+          echo "Known vulnerabilities in the base branch: $(wc -l < "$RUNNER_TEMP/base-result.txt"). In this pull request: $(wc -l < "$RUNNER_TEMP/head.txt")."
+          if [ -n "$new" ]; then
+            echo "::error::This pull request adds dependencies with known vulnerabilities (ecosystem, package, version, ID):"
+            echo "$new"
+            echo "Update them to a fixed version. Details: https://osv.dev/vulnerability/<ID>"
+            exit 1
+          fi
+          echo "The pull request adds no known vulnerabilities."
+
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Audit GitHub Actions workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: 1.31.1
+        run: |
+          set -eo pipefail
+          if [ ! -d .github/workflows ] && [ ! -d .github/actions ]; then
+            echo "No workflows or actions in this repository."
+            exit 0
+          fi
+          pipx run "zizmor==$VERSION" --format=github .github/
