@@ -30,17 +30,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Get a token for the noosphere-agent App
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ vars.NOOSPHERE_AGENT_APP_ID }}
           private-key: ${{ secrets.NOOSPHERE_AGENT_PRIVATE_KEY }}
-          owner: Noosphaira
+          # The workflow sets up every repository in the organization, so the token covers all of them.
+          owner: Noosphaira # zizmor: ignore[github-app]
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
 
       - name: Set up repositories
         env:

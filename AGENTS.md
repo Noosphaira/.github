@@ -63,7 +63,12 @@ The organization's `.github` repository. GitHub uses its files as defaults for e
 - `.github/workflows/pr-policy.yml` holds the pull request policy checks: `branch-name`, `commit-messages` and `pr-size`. The organization rulesets "develop" and "master" require them.
 
 ### Build, test and lint
-No build or tests exist. Check scripts with `bash -n scripts/setup-repos.sh`. Before a change to `setup-repos.sh` is merged, run it with `DRY_RUN=1` and an App token: it must report no change for repositories that are set up. Check a changed workflow with `actionlint .github/workflows/pr-policy.yml` when actionlint is installed.
+`.github/workflows/ci.yml` runs these on every pull request. Run them locally before user review:
+- `docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -no-color`: lints the workflows.
+- shellcheck on the hooks and scripts: the command in `.github/workflows/ci.yml`.
+- `scripts/test-hooks.sh`: tests the git hooks in `repo-files/` in a temporary repository. Needs `gitleaks`.
+- `uvx zizmor==1.31.1 .github/` with `GH_TOKEN` set: the audit that `pr-policy` runs on every repository.
+- `scripts/setup-repos.sh`: before a change is merged, run it with `DRY_RUN=1` and an App token. It must report no change for repositories that are set up.
 
 ### Run locally
 No application exists. To review a change to `pr-policy.yml` or the template, open a test pull request in `experiment-repo` after the change is merged, and show the check results or the pull request body.
