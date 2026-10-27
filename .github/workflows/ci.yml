@@ -1,0 +1,53 @@
+# Format, lint and test for this repository: the workflows, the shell scripts and the git hooks.
+name: ci
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: format, lint and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint the workflows (actionlint)
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -no-color
+
+      - name: Lint the shell scripts (shellcheck)
+        run: |
+          docker run --rm -v "$PWD:/mnt:ro" koalaman/shellcheck:v0.11.0 -x -P /mnt/repo-files/.githooks \
+            /mnt/repo-files/.githooks/pre-commit /mnt/repo-files/.githooks/commit-msg \
+            /mnt/repo-files/.githooks/pre-push /mnt/repo-files/.githooks/lib/common.sh \
+            /mnt/scripts/setup-repos.sh /mnt/scripts/test-hooks.sh /mnt/rulesets/apply.sh /mnt/agent/gh-app-token
+
+      - name: Check that this repository's own hooks and skills match repo-files/
+        run: |
+          set -eo pipefail
+          for f in .githooks/pre-commit .githooks/commit-msg .githooks/pre-push .githooks/lib/common.sh \
+            .claude/skills/git-workflow/SKILL.md .claude/skills/pr-review-loop/SKILL.md; do
+            cmp "$f" "repo-files/$f"
+          done
+          diff <(sed -n '/BEGIN UNIVERSAL/,/END UNIVERSAL/p' AGENTS.md) \
+            <(sed -n '/BEGIN UNIVERSAL/,/END UNIVERSAL/p' repo-files/AGENTS.md)
+
+      - name: Install gitleaks
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -eo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "$SHA256  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Test the git hooks
+        run: bash scripts/test-hooks.sh

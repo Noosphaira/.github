@@ -135,7 +135,7 @@ setup_repo() {
 - Allow merge commits and squash merging; do not allow rebase merging
 - Automatically delete head branches"
         report "  - not allowed: the App needs the Administration permission. Settings to set by hand:"
-        report "$(sed 's/^/    /' <<< "$missing")"
+        report "    ${missing//$'\n'/$'\n'    }"
         open_settings_issue "$repo" "$missing"
       fi
     fi

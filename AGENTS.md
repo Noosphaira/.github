@@ -10,6 +10,7 @@
 
 ### Setup
 - Before the first commit in a session, run `git config core.hooksPath`. If the output is not `.githooks`, run `git config core.hooksPath .githooks`.
+- Push, open pull requests and merge as the GitHub App `noosphere-agent`. The SessionStart hook sets `GH_TOKEN` to the App's token. Before the first push in a session, run `gh api /installation/repositories --silent`. If it fails, stop and report a blocker. Do not push with the user's credentials.
 
 ### Branches
 - `master` holds released code. `develop` is the integration branch and the default branch.
@@ -39,6 +40,7 @@
 3. Work with an open decision or blocker is not ready for user review. Present each decision and blocker to the user and wait for the answer.
 4. When the work is ready: commit, run the change locally (Project > Run locally) and present it to the user. Do not push and do not open a pull request.
 5. After the user approves: push the branch, open a pull request to `develop`, and follow the `pr-review-loop` skill until the pull request is merged.
+   Every merge into `develop` is made as the App. A pull request that is ready to merge is not left open: merge it, or tell the user what it waits for. When the user wants to merge a pull request into `develop` with their own account, tell them first that they then cannot approve the next release pull request to `master`: the `master` ruleset requires an approval from someone other than the last pusher.
 6. After the merge: open or update the pull request from `develop` to `master`. Merging into `master` requires the user's approval on GitHub. Merge into `master` only when the user asks.
 
 The `git-workflow` skill contains the commands for each step.
@@ -61,7 +63,12 @@ The organization's `.github` repository. GitHub uses its files as defaults for e
 - `.github/workflows/pr-policy.yml` holds the pull request policy checks: `branch-name`, `commit-messages` and `pr-size`. The organization rulesets "develop" and "master" require them.
 
 ### Build, test and lint
-No build or tests exist. Check scripts with `bash -n scripts/setup-repos.sh`. Before a change to `setup-repos.sh` is merged, run it with `DRY_RUN=1` and an App token: it must report no change for repositories that are set up. Check a changed workflow with `actionlint .github/workflows/pr-policy.yml` when actionlint is installed.
+`.github/workflows/ci.yml` runs these on every pull request. Run them locally before user review:
+- `docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -no-color`: lints the workflows.
+- shellcheck on the hooks and scripts: the command in `.github/workflows/ci.yml`.
+- `scripts/test-hooks.sh`: tests the git hooks in `repo-files/` in a temporary repository. Needs `gitleaks`.
+- `uvx zizmor==1.31.1 .github/` with `GH_TOKEN` set: the audit that `pr-policy` runs on every repository.
+- `scripts/setup-repos.sh`: before a change is merged, run it with `DRY_RUN=1` and an App token. It must report no change for repositories that are set up.
 
 ### Run locally
 No application exists. To review a change to `pr-policy.yml` or the template, open a test pull request in `experiment-repo` after the change is merged, and show the check results or the pull request body.
@@ -71,6 +78,7 @@ No application exists. To review a change to `pr-policy.yml` or the template, op
 - `.github/workflows/pr-policy.yml`: policy checks for pull requests to `develop` and `master`.
 - `rulesets/develop.json`, `rulesets/master.json`: the organization rulesets for `develop` and `master`. IDs are filled in by `rulesets/apply.sh`.
 - `rulesets/apply.sh`: creates the rulesets in the organization (needs the `admin:org` scope).
+- `rulesets/repository-ci.json`: the repository ruleset "ci" that every repository with CI has.
 - `repo-files/`: the files every repository gets, at their repository paths. `AGENTS.md` there is the template with Project placeholders.
 - `agent/gh-app-token`: token script for agent machines.
 - `.github/workflows/repository-setup.yml`: runs `scripts/setup-repos.sh` every 15 minutes as the `noosphere-agent` App. App ID: variable `NOOSPHERE_AGENT_APP_ID`. Private key: secret `NOOSPHERE_AGENT_PRIVATE_KEY`.

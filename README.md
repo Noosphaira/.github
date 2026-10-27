@@ -16,9 +16,11 @@ The full rules for agents and people are in the Universal section of `repo-files
 | Path | Contents |
 |---|---|
 | `pull_request_template.md` | Organization pull request template: Summary, Category, User review, Verification. A repository's own `.github/pull_request_template.md` takes precedence. |
-| `.github/workflows/pr-policy.yml` | Policy checks for pull requests to `develop` and `master`: `branch-name`, `commit-messages`, `pr-size`. |
+| `.github/workflows/pr-policy.yml` | Policy checks for pull requests to `develop` and `master` in every repository: `branch-name`, `commit-messages`, `pr-size`, `instruction-files`, `gitleaks`, `osv-scanner`, `zizmor`. |
+| `.github/workflows/ci.yml`, `scripts/test-hooks.sh` | This repository's own format, lint and test: actionlint, shellcheck, and a test of the git hooks. |
 | `rulesets/develop.json`, `rulesets/master.json` | The organization rulesets "develop" and "master". |
 | `rulesets/apply.sh` | Creates the rulesets through the API. |
+| `rulesets/repository-ci.json` | Repository ruleset "ci": requires the job `format, lint and test` on `develop` and `master`. Create it in a repository after its CI exists: `gh api repos/Noosphaira/<repository>/rulesets --method POST --input rulesets/repository-ci.json`. |
 | `repo-files/` | Files that every repository gets, at the paths they have in a repository. |
 | `.github/workflows/repository-setup.yml`, `scripts/setup-repos.sh` | Sets up new repositories automatically. See "Set up a repository". |
 | `agent/gh-app-token` | Token script for the machines that run coding agents. |
@@ -29,8 +31,9 @@ The full rules for agents and people are in the Universal section of `repo-files
 | Layer | What it enforces |
 |---|---|
 | Organization rulesets | Pull request required on `develop` and `master`. No force push, no deletion. Merge methods. Resolved review threads. One approval from `release-approvers` on `master`. The `pr-policy` checks. |
-| `pr-policy` workflow | Branch names, base and head of pull requests to `master`, commit trailers, pull request size (1,000 changed lines without lockfiles; the `size-exception` label allows more). |
-| Git hooks in `.githooks/` | No commits or pushes to `develop` or `master`, branch names, commit subject length, commit trailers, no `CLAUDE.md` files. Each clone needs `git config core.hooksPath .githooks`. |
+| `pr-policy` workflow | `branch-name`: branch names, and pull requests to `master` only from `develop`. `commit-messages`: trailers, and subject lines of at most 72 characters in pull requests to `develop`. `pr-size`: 1,000 changed lines without lockfiles (the `size-exception` label allows more). `instruction-files`: no `CLAUDE.md` files. `gitleaks`: no secrets in the pull request's commits. `osv-scanner`: no dependency versions with known vulnerabilities that the base branch does not already have. `zizmor`: security audit of the repository's workflows. |
+| Git hooks in `.githooks/` | No commits or pushes to `develop` or `master`, branch names, commit subject length, commit trailers, no `CLAUDE.md` files, no whitespace errors or conflict markers, no staged file over 5 MiB, no secrets (gitleaks on the staged changes). Each clone needs `git config core.hooksPath .githooks`, and the machine needs `gitleaks`. |
+| Repository CI (`.github/workflows/ci.yml` in each repository) | The repository's format, lint and test, as the job `format, lint and test`. A repository ruleset on `develop` and `master` requires it. |
 | `AGENTS.md` and the skills | The work cycle: user review before push, the review loop, and releases to `master` only when the user asks. |
 
 The rulesets take `pr-policy.yml` from `master` in this repository. A change to the workflow applies after it is released to `master`. This repository is public because a ruleset can use a workflow from a private repository only in private repositories.
@@ -55,7 +58,7 @@ Manual setup, the same steps:
 2. On a branch from `develop`, copy the contents of `repo-files/` into the repository. Make the three hooks in `.githooks/` executable.
 3. Fill the Project section of `AGENTS.md`.
 4. Open a pull request to `develop`.
-5. If the repository has CI, add a repository ruleset on `develop` and `master` that requires its CI checks.
+5. Add `.github/workflows/ci.yml` with the job `format, lint and test`, then create the repository ruleset from `rulesets/repository-ci.json`.
 
 ## Change a rule
 
