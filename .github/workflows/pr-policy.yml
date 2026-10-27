@@ -1,0 +1,142 @@
+# Pull request policy checks. Required for pull requests to develop and master
+# through the organization rulesets "develop" and "master".
+name: pr-policy
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  branch-name:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check base and head branch names
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -eo pipefail
+          categories='feature|bugfix|documentation|refactor|test|chore'
+          pattern="^(${categories})/[a-z0-9]+(-[a-z0-9]+)*$"
+          case "$BASE_REF" in
+            master)
+              if [ "$HEAD_REF" != "develop" ]; then
+                echo "::error::Pull requests to master come from develop only. Head branch: $HEAD_REF"
+                exit 1
+              fi
+              ;;
+            develop)
+              if [[ "$HEAD_REF" =~ ^(dependabot|renovate)/ ]]; then
+                echo "Dependency update branch: $HEAD_REF"
+                exit 0
+              fi
+              if ! [[ "$HEAD_REF" =~ $pattern ]]; then
+                echo "::error::Branch name '$HEAD_REF' does not match <category>/<description>. Categories: ${categories//|/, }"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "No branch rule for base branch $BASE_REF"
+              ;;
+          esac
+
+  commit-messages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check commit trailers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eo pipefail
+          assisted_by='^Assisted-by: [A-Za-z0-9._-]+:[A-Za-z0-9._-]+( \[[A-Za-z0-9._ -]+\])*$'
+          ai_identity='(claude|anthropic|copilot|openai|codex|chatgpt|gemini|cursor|devin)'
+          commits="$RUNNER_TEMP/commits.tsv"
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" \
+            --jq '.[] | select((.parents | length) < 2) | [.sha[0:12], (.commit.message | @base64)] | @tsv' > "$commits"
+          status=0
+          while IFS=$'\t' read -r sha message_b64; do
+            while IFS= read -r line; do
+              line="${line%$'\r'}"
+              case "$line" in
+                [Aa]ssisted-[Bb]y:*)
+                  if ! [[ "$line" =~ $assisted_by ]]; then
+                    echo "::error::$sha: malformed trailer '$line'. Format: Assisted-by: <agent>:<model>"
+                    status=1
+                  fi
+                  ;;
+              esac
+              shopt -s nocasematch
+              if [[ "$line" =~ ^(co-authored-by|signed-off-by): ]] && [[ "$line" =~ $ai_identity ]]; then
+                echo "::error::$sha: AI agent named in trailer '$line'. Use Assisted-by: <agent>:<model>"
+                status=1
+              fi
+              shopt -u nocasematch
+            done < <(printf '%s' "$message_b64" | base64 --decode)
+          done < "$commits"
+          exit "$status"
+
+  pr-size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check changed lines
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          LIMIT: ${{ vars.PR_SIZE_LIMIT || 1000 }}
+          LOCKFILES: '(^|/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|poetry\.lock|uv\.lock|Pipfile\.lock|Cargo\.lock|go\.sum|composer\.lock|Gemfile\.lock)$'
+        run: |
+          set -eo pipefail
+          if [ "$BASE_REF" != "develop" ]; then
+            echo "The size limit applies to pull requests to develop. Base branch: $BASE_REF"
+            exit 0
+          fi
+          if printf '%s' "$LABELS" | jq -e 'index("size-exception") != null' > /dev/null; then
+            echo "Label size-exception is set."
+            exit 0
+          fi
+          changed=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[] | "\(.additions + .deletions)\t\(.filename)"' \
+            | awk -F '\t' '$2 !~ ENVIRON["LOCKFILES"] { total += $1 } END { print total + 0 }')
+          echo "Changed lines excluding lockfiles: $changed. Limit: $LIMIT."
+          if [ "$changed" -gt "$LIMIT" ]; then
+            echo "::error::$changed changed lines exceed the limit of $LIMIT. A pull request over the limit needs the user's approval and the label size-exception."
+            exit 1
+          fi
+
+  ai-disclosure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the AI disclosure in the pull request body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -eo pipefail
+          case "$AUTHOR_LOGIN" in
+            "dependabot[bot]" | "renovate[bot]")
+              echo "Dependency update pull request by $AUTHOR_LOGIN. No disclosure required."
+              exit 0
+              ;;
+          esac
+          ticked=$(printf '%s\n' "$PR_BODY" | grep -Eic '^[[:space:]]*[-*] \[x\] (No AI tools were used|AI tools were used)' || true)
+          if [ "$ticked" != "1" ]; then
+            echo "::error::Tick exactly one box in the AI disclosure section of the pull request body. Ticked: ${ticked:-0}."
+            exit 1
+          fi
+          if printf '%s\n' "$PR_BODY" | grep -Eiq '^[[:space:]]*[-*] \[x\] AI tools were used: <agent and model>'; then
+            echo "::error::Replace <agent and model> in the ticked AI disclosure line."
+            exit 1
+          fi
