@@ -71,11 +71,14 @@ No application exists. To review a change to `pr-policy.yml` or the template, op
 - `.github/workflows/pr-policy.yml`: policy checks for pull requests to `develop` and `master`.
 - `rulesets/develop.json`, `rulesets/master.json`: the organization rulesets for `develop` and `master`. IDs are filled in by `rulesets/apply.sh`.
 - `rulesets/apply.sh`: creates the rulesets in the organization (needs the `admin:org` scope).
-- `README.md`: repository title.
+- `repo-files/`: the files every repository gets, at their repository paths. `AGENTS.md` there is the template with Project placeholders.
+- `agent/gh-app-token`: token script for agent machines.
+- `README.md`: the git model, the contents of this repository, and how to set up a repository or change a rule.
 
 ### Conventions
 - The live organization rulesets match the files in `rulesets/`. After a change to a file, update the live ruleset in the organization settings or through the API, in the same change.
 - The rulesets take `pr-policy.yml` from `master`. A change to the workflow applies after it is released to `master`.
+- This repository's own `AGENTS.md` Universal section, `.claude/skills/` and `.githooks/` are identical to `repo-files/`. Change both together.
 - A rule in `pr-policy.yml` that is also in `.githooks/lib/common.sh` (branch pattern, `Assisted-by` pattern, AI identity pattern, lockfile list) changes in both places.
 
 ### Exceptions to universal rules
