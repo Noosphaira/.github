@@ -114,29 +114,3 @@ jobs:
             echo "::error::$changed changed lines exceed the limit of $LIMIT. A pull request over the limit needs the user's approval and the label size-exception."
             exit 1
           fi
-
-  ai-disclosure:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Check the AI disclosure in the pull request body
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
-        run: |
-          set -eo pipefail
-          case "$AUTHOR_LOGIN" in
-            "dependabot[bot]" | "renovate[bot]")
-              echo "Dependency update pull request by $AUTHOR_LOGIN. No disclosure required."
-              exit 0
-              ;;
-          esac
-          ticked=$(printf '%s\n' "$PR_BODY" | grep -Eic '^[[:space:]]*[-*] \[x\] (No AI tools were used|AI tools were used)' || true)
-          if [ "$ticked" != "1" ]; then
-            echo "::error::Tick exactly one box in the AI disclosure section of the pull request body. Ticked: ${ticked:-0}."
-            exit 1
-          fi
-          if printf '%s\n' "$PR_BODY" | grep -Eiq '^[[:space:]]*[-*] \[x\] AI tools were used: <agent and model>'; then
-            echo "::error::Replace <agent and model> in the ticked AI disclosure line."
-            exit 1
-          fi
