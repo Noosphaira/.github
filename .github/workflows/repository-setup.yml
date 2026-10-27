@@ -1,0 +1,52 @@
+# Sets up new repositories in the organization: develop branch, default branch and
+# merge settings, and a pull request with the files in repo-files/.
+# Repositories that are already set up are not changed. Logic: scripts/setup-repos.sh.
+name: repository-setup
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Only this repository (empty: all repositories)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Report what would change, change nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    if: github.repository == 'Noosphaira/.github'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Get a token for the noosphere-agent App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.NOOSPHERE_AGENT_APP_ID }}
+          private-key: ${{ secrets.NOOSPHERE_AGENT_PRIVATE_KEY }}
+          owner: Noosphaira
+
+      - name: Set up repositories
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ORG: Noosphaira
+          REPO: ${{ inputs.repo }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          SUMMARY: ${{ github.step_summary }}
+        run: bash scripts/setup-repos.sh

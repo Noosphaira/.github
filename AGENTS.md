@@ -61,7 +61,7 @@ The organization's `.github` repository. GitHub uses its files as defaults for e
 - `.github/workflows/pr-policy.yml` holds the pull request policy checks: `branch-name`, `commit-messages` and `pr-size`. The organization rulesets "develop" and "master" require them.
 
 ### Build, test and lint
-No build, tests or linters exist. Check a changed workflow with `actionlint .github/workflows/pr-policy.yml` when actionlint is installed.
+No build or tests exist. Check scripts with `bash -n scripts/setup-repos.sh`. Before a change to `setup-repos.sh` is merged, run it with `DRY_RUN=1` and an App token: it must report no change for repositories that are set up. Check a changed workflow with `actionlint .github/workflows/pr-policy.yml` when actionlint is installed.
 
 ### Run locally
 No application exists. To review a change to `pr-policy.yml` or the template, open a test pull request in `experiment-repo` after the change is merged, and show the check results or the pull request body.
@@ -71,11 +71,16 @@ No application exists. To review a change to `pr-policy.yml` or the template, op
 - `.github/workflows/pr-policy.yml`: policy checks for pull requests to `develop` and `master`.
 - `rulesets/develop.json`, `rulesets/master.json`: the organization rulesets for `develop` and `master`. IDs are filled in by `rulesets/apply.sh`.
 - `rulesets/apply.sh`: creates the rulesets in the organization (needs the `admin:org` scope).
-- `README.md`: repository title.
+- `repo-files/`: the files every repository gets, at their repository paths. `AGENTS.md` there is the template with Project placeholders.
+- `agent/gh-app-token`: token script for agent machines.
+- `.github/workflows/repository-setup.yml`: runs `scripts/setup-repos.sh` every 15 minutes as the `noosphere-agent` App. App ID: variable `NOOSPHERE_AGENT_APP_ID`. Private key: secret `NOOSPHERE_AGENT_PRIVATE_KEY`.
+- `scripts/setup-repos.sh`: sets up repositories that are not set up. `DRY_RUN=1` reports without changes.
+- `README.md`: the git model, the contents of this repository, and how to set up a repository or change a rule.
 
 ### Conventions
 - The live organization rulesets match the files in `rulesets/`. After a change to a file, update the live ruleset in the organization settings or through the API, in the same change.
 - The rulesets take `pr-policy.yml` from `master`. A change to the workflow applies after it is released to `master`.
+- This repository's own `AGENTS.md` Universal section, `.claude/skills/` and `.githooks/` are identical to `repo-files/`. Change both together.
 - A rule in `pr-policy.yml` that is also in `.githooks/lib/common.sh` (branch pattern, `Assisted-by` pattern, AI identity pattern, lockfile list) changes in both places.
 
 ### Exceptions to universal rules
