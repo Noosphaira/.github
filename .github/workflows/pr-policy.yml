@@ -109,7 +109,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.base_ref }}
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          LIMIT: ${{ vars.PR_SIZE_LIMIT || 1000 }}
+          LIMIT: ${{ vars.PR_SIZE_LIMIT || 10000 }}
           LOCKFILES: '(^|/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|poetry\.lock|uv\.lock|Pipfile\.lock|Cargo\.lock|go\.sum|composer\.lock|Gemfile\.lock)$'
         run: |
           set -eo pipefail
