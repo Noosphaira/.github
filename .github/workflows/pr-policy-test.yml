@@ -54,7 +54,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_REF: ${{ github.base_ref }}
+          BASE_REF: develop # test only
         run: |
           set -eo pipefail
           assisted_by='^Assisted-by: [A-Za-z0-9._-]+:[A-Za-z0-9._-]+( \[[A-Za-z0-9._ -]+\])*$'
