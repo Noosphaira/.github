@@ -20,6 +20,7 @@ The full rules for agents and people are in the Universal section of `repo-files
 | `.github/workflows/ci.yml`, `scripts/test-hooks.sh` | This repository's own format, lint and test: actionlint, shellcheck, and a test of the git hooks. |
 | `rulesets/develop.json`, `rulesets/master.json` | The organization rulesets "develop" and "master". |
 | `rulesets/apply.sh` | Creates the rulesets through the API. |
+| `rulesets/repository-ci.json` | Repository ruleset "ci": requires the job `format, lint and test` on `develop` and `master`. Create it in a repository after its CI exists: `gh api repos/Noosphaira/<repository>/rulesets --method POST --input rulesets/repository-ci.json`. |
 | `repo-files/` | Files that every repository gets, at the paths they have in a repository. |
 | `.github/workflows/repository-setup.yml`, `scripts/setup-repos.sh` | Sets up new repositories automatically. See "Set up a repository". |
 | `agent/gh-app-token` | Token script for the machines that run coding agents. |
@@ -57,7 +58,7 @@ Manual setup, the same steps:
 2. On a branch from `develop`, copy the contents of `repo-files/` into the repository. Make the three hooks in `.githooks/` executable.
 3. Fill the Project section of `AGENTS.md`.
 4. Open a pull request to `develop`.
-5. If the repository has CI, add a repository ruleset on `develop` and `master` that requires its CI checks.
+5. Add `.github/workflows/ci.yml` with the job `format, lint and test`, then create the repository ruleset from `rulesets/repository-ci.json`.
 
 ## Change a rule
 
