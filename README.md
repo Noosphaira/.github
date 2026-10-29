@@ -30,7 +30,7 @@ The full rules for agents and people are in the Universal section of `repo-files
 
 | Layer | What it enforces |
 |---|---|
-| Organization rulesets | Pull request required on `develop` and `master`. No force push, no deletion. Merge methods. Resolved review threads. One approval from `release-approvers` on `master`; a new push dismisses it. The `pr-policy` checks. |
+| Organization rulesets | Pull request required on `develop` and `master`. No force push, no deletion. Merge methods. Resolved review threads. One approval from `release-approvers` on `master`; a new push dismisses it. The `pr-policy` checks, except when a branch is created. Organization admins can bypass the `master` ruleset. |
 | `pr-policy` workflow | `branch-name`: branch names, and pull requests to `master` only from `develop`. `commit-messages`: trailers, and subject lines of at most 72 characters in pull requests to `develop`. `pr-size`: 10,000 changed lines without lockfiles (the `size-exception` label allows more). `instruction-files`: no `CLAUDE.md` files. `gitleaks`: no secrets in the pull request's commits. `osv-scanner`: no dependency versions with known vulnerabilities that the base branch does not already have. `zizmor`: security audit of the repository's workflows. |
 | Git hooks in `.githooks/` | No commits or pushes to `develop` or `master`, branch names, commit subject length, commit trailers, no `CLAUDE.md` files, no whitespace errors or conflict markers, no staged file over 5 MiB, no secrets (gitleaks on the staged changes). Each clone needs `git config core.hooksPath .githooks`, and the machine needs `gitleaks`. |
 | Repository CI (`.github/workflows/ci.yml` in each repository) | The repository's format, lint and test, as the job `format, lint and test`. A repository ruleset on `develop` and `master` requires it. |
@@ -42,19 +42,19 @@ The rulesets take `pr-policy.yml` from `master` in this repository. A change to 
 
 The `repository-setup` workflow runs every 15 minutes, as the `noosphere-agent` App. For each repository that is not set up yet, it:
 
-1. Creates `develop` from `master`.
-2. Makes `develop` the default branch and sets the merge settings. The App has no Administration permission, so GitHub refuses this step. The workflow then lists the settings in its run summary and opens the issue "Repository settings need an administrator" in the repository.
+1. Creates `master` from `develop`. In a repository that has `master` but no `develop`, it creates `develop` from `master`.
+2. Makes `develop` the default branch, if it is not. The App has no Administration permission, so GitHub refuses this step. The workflow then reports it in its run summary and opens the issue "Repository settings need an administrator" in the repository. The rulesets set the merge methods, so the merge settings of the repository are not changed.
 3. Opens a pull request from `chore/repository-setup` to `develop` with the files in `repo-files/`.
 
-Then fill the Project section of `AGENTS.md` on that branch, and merge the pull request.
+Then merge the pull request. The Project section of `AGENTS.md` can be filled in a later pull request.
 
-A new repository needs a first commit on `master` (create it with a README). Set the organization's default branch name for new repositories to `master`. An empty repository, or one without `master`, is reported and skipped.
+The organization's default branch name for new repositories is `develop`, so a new repository starts with `develop` as its default branch. Create a new repository with a README, so that it has a first commit on `develop`. An empty repository, or one without `develop` and `master`, is reported and skipped. A repository that fails is reported, and the run continues with the next repository and ends with a failure.
 
 To run the workflow at once: Actions > repository-setup > Run workflow. The inputs are a single repository and a dry run. Locally, with an App token in `GH_TOKEN`: `DRY_RUN=1 scripts/setup-repos.sh`.
 
 Manual setup, the same steps:
 
-1. Create `develop` from `master` and make it the default branch. Allow squash merge and merge commits, turn off rebase merge, and turn on head branch deletion after merge.
+1. Create `master` from `develop`, and make `develop` the default branch.
 2. On a branch from `develop`, copy the contents of `repo-files/` into the repository. Make the three hooks in `.githooks/` executable.
 3. Fill the Project section of `AGENTS.md`.
 4. Open a pull request to `develop`.

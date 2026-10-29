@@ -1,5 +1,5 @@
-# Sets up new repositories in the organization: develop branch, default branch and
-# merge settings, and a pull request with the files in repo-files/.
+# Sets up new repositories in the organization: master and develop branches, default branch,
+# and a pull request with the files in repo-files/.
 # Repositories that are already set up are not changed. Logic: scripts/setup-repos.sh.
 name: repository-setup
 
