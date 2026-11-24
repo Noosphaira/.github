@@ -45,6 +45,8 @@ expect pass   "file of 1 MiB"       'head -c 1048576 /dev/urandom > ok.bin'
 expect refuse "secret"              'printf "token = \"ghp_%s\"\n" "$(head -c 400 /dev/urandom | tr -dc A-Za-z0-9 | cut -c1-36)" > d.txt'
 expect refuse "CLAUDE.md file"      'echo rules > CLAUDE.md'
 expect refuse "subject over 72"     'echo more >> a.txt' "Add a change whose subject line is far longer than the seventy-two character limit"
+# A body larger than a pipe buffer (64 KiB): the hook must not break its own pipe.
+expect pass   "long message body"   'echo more >> a.txt' "$(printf 'Add a change with a long body\n\n%s' "$(head -c 75000 /dev/urandom | base64 -w 76)")"
 expect refuse "AI co-author trailer" 'echo more >> a.txt' "$(printf 'Add a change\n\nCo-authored-by: Claude <noreply@anthropic.com>')"
 
 git switch -q master
