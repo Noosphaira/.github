@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Sets up the organization's repositories that are not set up yet:
-#   1. Creates develop from master.
-#   2. Makes develop the default branch and sets the merge settings.
+#   1. Creates master from develop, or develop from master, when one of them is missing.
+#   2. Makes develop the default branch.
 #   3. Opens a pull request to develop with the files in repo-files/.
-# Repositories that are already set up are not changed.
+# Repositories that are already set up are not changed. A repository that fails is reported, the run
+# continues with the next repository and exits with status 1.
 #
 # Environment:
 #   GH_TOKEN  Token of the noosphere-agent App (contents, pull requests, issues; administration for step 2).
@@ -43,6 +44,11 @@ has_branch() {
   gh api "repos/$ORG/$1/git/ref/heads/$2" --silent 2>/dev/null
 }
 
+create_branch() {
+  gh api "repos/$ORG/$1/git/refs" --method POST -f ref="refs/heads/$2" \
+    -f sha="$(gh api "repos/$ORG/$1/git/ref/heads/$3" --jq .object.sha)" --silent
+}
+
 has_file() {
   gh api "repos/$ORG/$1/contents/$3?ref=$2" --silent 2>/dev/null
 }
@@ -67,8 +73,6 @@ Add the organization's repository files from `Noosphaira/.github` `repo-files/`:
 - `AGENTS.md` with the universal rules and an empty Project section.
 - The `git-workflow` and `pr-review-loop` skills in `.claude/skills/`.
 - The git hooks in `.githooks/`.
-
-Before merging, fill the Project section of `AGENTS.md` on this branch.
 
 ## Category
 chore
@@ -106,36 +110,37 @@ setup_repo() {
     return 0
   fi
   if [ "$(jq -r .size <<< "$info")" = 0 ] && ! has_branch "$repo" "$default"; then
-    report "- **$repo**: empty repository. Skipped until it has a first commit on master."
+    report "- **$repo**: empty repository. Skipped until it has a first commit on develop."
     return 0
   fi
 
-  # 1. develop from master
-  if ! has_branch "$repo" develop; then
-    if ! has_branch "$repo" master; then
-      report "- **$repo**: no master branch (default branch: $default). Rename it to master, then run again."
+  # 1. master and develop
+  local from="" to=""
+  if ! has_branch "$repo" master; then
+    from=develop to=master
+  elif ! has_branch "$repo" develop; then
+    from=master to=develop
+  fi
+  if [ -n "$to" ]; then
+    if ! has_branch "$repo" "$from"; then
+      report "- **$repo**: no develop or master branch (default branch: $default). Rename it to develop, then run again."
       return 0
     fi
     [ "$changed" = 1 ] || report "- **$repo**:"
     changed=1
-    if act "create develop from master"; then
-      gh api "repos/$ORG/$repo/git/refs" --method POST -f ref=refs/heads/develop \
-        -f sha="$(gh api "repos/$ORG/$repo/git/ref/heads/master" --jq .object.sha)" --silent
+    if act "create $to from $from"; then
+      create_branch "$repo" "$to" "$from"
     fi
   fi
 
-  # 2. Default branch and merge settings
-  local want='{"default_branch":"develop","allow_squash_merge":true,"allow_merge_commit":true,"allow_rebase_merge":false,"delete_branch_on_merge":true}'
-  if [ "$(jq -c '{default_branch, allow_squash_merge, allow_merge_commit, allow_rebase_merge, delete_branch_on_merge}' <<< "$info")" != "$want" ]; then
+  # 2. Default branch. The rulesets set the merge methods.
+  if [ "$default" != develop ]; then
     [ "$changed" = 1 ] || report "- **$repo**:"
     changed=1
-    if act "set develop as default branch and the merge settings"; then
-      if ! gh api "repos/$ORG/$repo" --method PATCH --input - --silent <<< "$want" 2>/dev/null; then
-        missing="- Default branch: develop
-- Allow merge commits and squash merging; do not allow rebase merging
-- Automatically delete head branches"
-        report "  - not allowed: the App needs the Administration permission. Settings to set by hand:"
-        report "    ${missing//$'\n'/$'\n'    }"
+    if act "set develop as default branch"; then
+      if ! gh api "repos/$ORG/$repo" --method PATCH -f default_branch=develop --silent 2>/dev/null; then
+        missing="- Default branch: develop"
+        report "  - not allowed: the App needs the Administration permission. Set the default branch to develop by hand."
         open_settings_issue "$repo" "$missing"
       fi
     fi
@@ -159,7 +164,19 @@ if [ -n "$REPO" ]; then
 else
   repos="$(gh api --paginate "orgs/$ORG/repos?per_page=100" --jq '.[].name')"
 fi
+failed=""
 for repo in $repos; do
-  setup_repo "$repo"
+  set +e
+  (set -e; setup_repo "$repo")
+  status=$?
+  set -e
+  if [ "$status" != 0 ]; then
+    report "- **$repo**: failed with exit status $status. The run log shows the error."
+    failed="$failed $repo"
+  fi
 done
+if [ -n "$failed" ]; then
+  report "Failed:$failed"
+  exit 1
+fi
 report "Done."

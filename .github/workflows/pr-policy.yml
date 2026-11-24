@@ -64,10 +64,13 @@ jobs:
             --jq '.[] | select((.parents | length) < 2) | [.sha[0:12], (.commit.message | @base64)] | @tsv' > "$commits"
           status=0
           while IFS=$'\t' read -r sha message_b64; do
+            # Decoded once into a variable: a pipe into `awk ... exit` breaks under pipefail
+            # when base64 is still writing a long message.
+            message="$(printf '%s' "$message_b64" | base64 --decode)"
             # Subject length: pull requests to develop only. Squash merges append " (#N)"
             # to the title, so commits in a release pull request may be longer.
             if [ "$BASE_REF" = "develop" ]; then
-              subject="$(printf '%s' "$message_b64" | base64 --decode | awk 'NF { print; exit }')"
+              subject="$(awk 'NF { print; exit }' <<< "$message")"
               case "$subject" in
                 "Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*) ;;
                 *)
@@ -94,7 +97,7 @@ jobs:
                 status=1
               fi
               shopt -u nocasematch
-            done < <(printf '%s' "$message_b64" | base64 --decode)
+            done <<< "$message"
           done < "$commits"
           exit "$status"
 
